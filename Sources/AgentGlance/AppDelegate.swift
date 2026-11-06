@@ -55,7 +55,92 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func dictate(into session: Session?) {}
+    // MARK: - Dictation
+
+    private let dictation = Dictation()
+    private var keyMonitor: Any?
+
+    /// Mic button: starts dictating into the session, or, on the recording row, finishes and sends.
+    func dictate(into session: Session?) {
+        guard let session else {
+            model.showNotice("No session to dictate into yet.")
+            return
+        }
+        if model.dictatingKey == session.key {
+            finishDictation()
+            return
+        }
+        dictation.cancel()
+        model.dictatingKey = session.key
+        model.transcript = ""
+        dictation.onTranscript = { [weak self] text in self?.model.transcript = text }
+        beginKeyboardCapture()
+        Task {
+            do {
+                try await dictation.start(for: session.key)
+            } catch {
+                endDictationUI()
+                model.showNotice(error.localizedDescription)
+            }
+        }
+    }
+
+    private func finishDictation() {
+        guard let key = model.dictatingKey else { return }
+        endKeyboardCapture()
+        Task {
+            let text = await dictation.finish()
+            let session = model.store.sessions.first { $0.key == key }
+            endDictationUI()
+            guard let session else {
+                if !text.isEmpty {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                }
+                model.showNotice("That session ended. Text copied.")
+                return
+            }
+            if let notice = await MessageSender(focuser: focuser).send(text, to: session) {
+                model.showNotice(notice)
+            }
+        }
+    }
+
+    private func cancelDictation() {
+        dictation.cancel()
+        endDictationUI()
+    }
+
+    private func endDictationUI() {
+        endKeyboardCapture()
+        model.dictatingKey = nil
+        model.transcript = ""
+    }
+
+    /// While dictating, the panel takes key status (without activating the app) so Return and Esc
+    /// reach it; everything else is swallowed so stray keys don't go anywhere.
+    private func beginKeyboardCapture() {
+        panel.acceptsKeyboard = true
+        panel.makeKey()
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            MainActor.assumeIsolated {
+                switch event.keyCode {
+                case 36, 76: self?.finishDictation()  // Return, Enter
+                case 53: self?.cancelDictation()  // Esc
+                default: break
+                }
+            }
+            return nil
+        }
+    }
+
+    private func endKeyboardCapture() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+        panel.acceptsKeyboard = false
+        panel.resignKey()
+    }
 
     // MARK: - Hooks
 

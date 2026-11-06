@@ -10,7 +10,12 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp "$BIN/AgentGlance" "$BIN/agent-glance-hook" "$APP/Contents/MacOS/"
-codesign -s - --force --deep "$APP" 2>/dev/null
+# Sign with the local "Agent Glance Dev" certificate when present, so macOS keeps Accessibility
+# and Microphone permissions across rebuilds; otherwise fall back to ad-hoc signing.
+IDENTITY="Agent Glance Dev"
+security find-identity -p codesigning 2>/dev/null | grep -q "\"$IDENTITY\"" || IDENTITY="-"
+codesign -s "$IDENTITY" --force --deep "$APP" 2>/dev/null
+echo "signed with: $IDENTITY"
 echo "built $APP"
 if [ "$1" = "--install" ]; then
     mkdir -p "$HOME/Applications"
