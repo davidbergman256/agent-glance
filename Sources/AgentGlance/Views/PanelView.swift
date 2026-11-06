@@ -32,7 +32,7 @@ struct PanelView: View {
             GlassEffectContainer {
                 if expanded {
                     list
-                        .glassEffect(.regular, in: .rect(cornerRadius: Theme.listCornerRadius, style: .continuous))
+                        .glassEffect(.clear, in: .rect(cornerRadius: Theme.listCornerRadius, style: .continuous))
                         .glassEffectID("surface", in: glass)
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.6, anchor: .topLeading).combined(with: .opacity),
@@ -41,7 +41,7 @@ struct PanelView: View {
                     CompactPill(sessions: model.store.sessions) {
                         onMic(model.store.mostRecentAttention)
                     }
-                    .glassEffect(.regular, in: .capsule)
+                    .glassEffect(.clear, in: .capsule)
                     .glassEffectID("surface", in: glass)
                     .transition(.opacity)
                     .onTapGesture(perform: toggleCompact)
