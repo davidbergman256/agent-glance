@@ -52,9 +52,10 @@ final class Dictation {
                                                                          considering: mic.inputFormat) else {
             throw DictationError.noAudioFormat
         }
+        guard target == key else { return }  // stopped while preparing: never open the mic
         let (stream, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
         let analyzer = SpeechAnalyzer(modules: [transcriber])
-        results = Task { [weak self] in
+        let results = Task { [weak self] in
             do {
                 for try await result in transcriber.results {
                     self?.receive(String(result.text.characters), isFinal: result.isFinal)
@@ -62,10 +63,17 @@ final class Dictation {
             } catch {}
         }
         try await analyzer.start(inputSequence: stream)
+        guard target == key else {  // stopped while the analyzer was starting
+            continuation.finish()
+            results.cancel()
+            await analyzer.cancelAndFinishNow()
+            return
+        }
         try mic.start(converting: format) { buffer in continuation.yield(AnalyzerInput(buffer: buffer)) }
         self.mic = mic
         self.analyzer = analyzer
         self.input = continuation
+        self.results = results
         onTranscript("")
     }
 
