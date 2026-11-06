@@ -11,8 +11,6 @@ final class AppModel {
     var enabledSources: Set<Source> = Set(Source.allCases.filter { AppSettings.isEnabled($0) })
     /// When true the panel rests as the pill and expands on hover; when false the list stays open.
     var compactView = AppSettings.compactView
-    /// Bumped when a session newly needs you; each bump plays one bounce of its dot.
-    var bounces: [SessionKey: Int] = [:]
     /// The session being dictated into, and the live transcript (Task 9).
     var dictatingKey: SessionKey?
     var transcript = ""
@@ -36,14 +34,8 @@ final class AppModel {
     func handle(_ event: HookEvent) {
         guard enabledSources.contains(event.source) else { return }
         let key = SessionKey(source: event.source, id: event.sessionId)
-        let before = store.sessions.first { $0.key == key }
-        let isNew = before == nil
+        let isNew = !store.sessions.contains { $0.key == key }
         store.apply(event, now: Date())
-        let after = store.sessions.first { $0.key == key }
-        if after?.state.needsUser == true, before?.state.needsUser != true {
-            bounces[key, default: 0] += 1
-        }
-        bounces = bounces.filter { k, _ in store.sessions.contains { $0.key == k } }
         if isNew || event.name == "UserPromptSubmit" || event.name == "Stop" {
             refreshTitle(key, transcriptPath: event.transcriptPath)
         }

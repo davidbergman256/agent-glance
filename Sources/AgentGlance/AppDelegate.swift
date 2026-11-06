@@ -5,6 +5,7 @@ import ServiceManagement
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
+    let focuser = SessionFocuser()
     private var panel: FloatingPanel!
     private var statusItem: StatusItemController!
     private var hotKey: HotKey?
@@ -15,7 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model: model,
             onFocus: { [weak self] session in self?.focus(session) },
             onMic: { [weak self] session in self?.dictate(into: session) },
-            onSize: { [weak self] size in self?.panel?.fit(size) }
+            onSize: { [weak self] size in self?.panel?.fit(size) },
+            onToggleCompact: { [weak self] in self?.setCompact(!AppSettings.compactView) }
         ))
         panel.orderFrontRegardless()
         NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: .main) { [weak self] _ in
@@ -46,7 +48,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Rows
 
     func focus(_ session: Session) {
-        if session.state == .done { model.store.dismiss(session.key) }
+        Task {
+            let verified = await focuser.focus(session)
+            if session.state == .done { model.store.dismiss(session.key) }
+            if !verified { model.showNotice("Opened \(Theme.sourceName(session.key.source)), but couldn't confirm the session.") }
+        }
     }
 
     func dictate(into session: Session?) {}

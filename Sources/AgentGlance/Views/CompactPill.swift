@@ -4,7 +4,6 @@ import SwiftUI
 /// The resting view: one dot per session, a hairline divider, and the mic.
 struct CompactPill: View {
     let sessions: [Session]
-    let bounces: [SessionKey: Int]
     let onMic: () -> Void
 
     var body: some View {
@@ -13,7 +12,7 @@ struct CompactPill: View {
                 StatusDot(state: nil)
             }
             ForEach(sessions) { session in
-                StatusDot(state: session.state, bounce: bounces[session.key] ?? 0)
+                StatusDot(state: session.state)
             }
             Rectangle()
                 .fill(.separator)

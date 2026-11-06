@@ -1,22 +1,25 @@
 import AgentGlanceCore
 import SwiftUI
 
-/// The whole floating surface. In compact view it rests as the pill, expands on hover after
-/// 150 ms, pins open on click, and collapses 400 ms after the pointer leaves unless pinned.
+/// The whole floating surface. In compact view it rests as the pill and peeks open on hover.
+/// Clicking an empty spot in the open list toggles compact view (remembered, same as the menu
+/// item): off keeps the list open, on folds it back right away.
 struct PanelView: View {
     let model: AppModel
     var onFocus: (Session) -> Void = { _ in }
     var onMic: (Session?) -> Void = { _ in }
     var onSize: (CGSize) -> Void = { _ in }
+    var onToggleCompact: () -> Void = {}
 
     @State private var hovering = false
-    @State private var pinned = false
+    /// After folding the list by click, ignore hover until the pointer leaves once.
+    @State private var hoverSuppressed = false
     @State private var hoverTask: Task<Void, Never>?
     @Namespace private var glass
-    static let motion = Animation.spring(duration: 0.32, bounce: 0.12)
+    static let motion = Animation.smooth(duration: 0.3)
 
     private var expanded: Bool {
-        !model.compactView || pinned || hovering || model.dictatingKey != nil
+        !model.compactView || (hovering && !hoverSuppressed) || model.dictatingKey != nil
     }
 
     var body: some View {
@@ -35,13 +38,13 @@ struct PanelView: View {
                             insertion: .scale(scale: 0.6, anchor: .topLeading).combined(with: .opacity),
                             removal: .scale(scale: 0.6, anchor: .topLeading).combined(with: .opacity)))
                 } else {
-                    CompactPill(sessions: model.store.sessions, bounces: model.bounces) {
+                    CompactPill(sessions: model.store.sessions) {
                         onMic(model.store.mostRecentAttention)
                     }
                     .glassEffect(.regular, in: .capsule)
                     .glassEffectID("surface", in: glass)
                     .transition(.opacity)
-                    .onTapGesture { withAnimation(Self.motion) { pinned = true } }
+                    .onTapGesture(perform: toggleCompact)
                 }
             }
             .onHover(perform: hoverChanged)
@@ -72,7 +75,6 @@ struct PanelView: View {
                 ForEach(section.sessions) { session in
                     VStack(alignment: .leading, spacing: 0) {
                         SessionRow(session: session,
-                                   bounce: model.bounces[session.key] ?? 0,
                                    recording: model.dictatingKey == session.key,
                                    onFocus: { onFocus(session) },
                                    onMic: { onMic(session) })
@@ -92,7 +94,8 @@ struct PanelView: View {
         }
         .padding(Theme.listPadding)
         .frame(width: Theme.listWidth, alignment: .leading)
-        .onTapGesture(count: 2) { withAnimation(Self.motion) { pinned.toggle() } }
+        .contentShape(.rect(cornerRadius: Theme.listCornerRadius, style: .continuous))
+        .onTapGesture(perform: toggleCompact)  // rows and mic buttons handle their own clicks first
     }
 
     private struct Section { let source: Source; let sessions: [Session] }
@@ -101,6 +104,13 @@ struct PanelView: View {
         Source.allCases.compactMap { source in
             let rows = model.store.sessions.filter { $0.key.source == source }
             return rows.isEmpty ? nil : Section(source: source, sessions: rows)
+        }
+    }
+
+    private func toggleCompact() {
+        withAnimation(Self.motion) {
+            if !model.compactView { hoverSuppressed = true }  // folding while hovered: close now
+            onToggleCompact()
         }
     }
 
@@ -116,7 +126,7 @@ struct PanelView: View {
             guard !Task.isCancelled else { return }
             withAnimation(Self.motion) {
                 hovering = false
-                pinned = false
+                hoverSuppressed = false
             }
         }
     }

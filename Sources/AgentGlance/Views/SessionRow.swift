@@ -4,7 +4,6 @@ import SwiftUI
 /// One session: state dot, title, live status line, mic. Red and yellow rows get a tint.
 struct SessionRow: View {
     let session: Session
-    var bounce = 0
     var recording = false
     let onFocus: () -> Void
     let onMic: () -> Void
@@ -12,7 +11,7 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            StatusDot(state: session.state, bounce: bounce)
+            StatusDot(state: session.state)
             Text(session.title)
                 .font(Theme.title)
                 .lineLimit(1)
