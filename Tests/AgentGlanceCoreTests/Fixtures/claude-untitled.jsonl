@@ -1,0 +1,3 @@
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<system-reminder>ignore me</system-reminder>"}]},"sessionId":"s2"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"x"}]},"sessionId":"s2"}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"please run an arbitrary task for thirty seconds now"}]},"sessionId":"s2"}

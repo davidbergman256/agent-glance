@@ -8,7 +8,7 @@ let package = Package(
         .target(name: "AgentGlanceCore"),
         .executableTarget(name: "AgentGlance", dependencies: ["AgentGlanceCore"]),
         .executableTarget(name: "agent-glance-hook"),
-        .testTarget(name: "AgentGlanceCoreTests", dependencies: ["AgentGlanceCore"]),
+        .testTarget(name: "AgentGlanceCoreTests", dependencies: ["AgentGlanceCore"], exclude: ["Fixtures"]),
     ],
     swiftLanguageModes: [.v6]
 )
