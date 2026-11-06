@@ -75,3 +75,7 @@ Measured on an M5 MacBook with sessions running: about 0.0–0.1% CPU and a 29 M
 1. Turn both sources off in the menu, which removes the hooks, then quit.
 2. Delete `~/Applications/Agent Glance.app` and `~/Library/Application Support/AgentGlance`.
 3. Optionally, delete the **Agent Glance Dev** certificate in Keychain Access.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
