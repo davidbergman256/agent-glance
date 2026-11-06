@@ -32,6 +32,11 @@ enum Theme {
     static let listWidth: CGFloat = 330
     static let titleMaxWidth: CGFloat = 150
     static let dotSize: CGFloat = 9
+    /// The pill is a capsule about 34 pt tall, so its corners are ~17 pt. The list uses the
+    /// same radius so expanding reads as one shape growing; rows sit 4 pt inside, concentric.
+    static let listCornerRadius: CGFloat = 18
+    static let listPadding: CGFloat = 4
+    static let rowCornerRadius: CGFloat = listCornerRadius - listPadding
 
     static func sourceName(_ source: Source) -> String {
         switch source {

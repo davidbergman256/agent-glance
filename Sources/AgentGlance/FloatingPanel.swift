@@ -21,7 +21,7 @@ final class FloatingPanel: NSPanel {
         becomesKeyOnlyIfNeeded = true
         isReleasedWhenClosed = false
         let host = NSHostingController(rootView: content)
-        host.sizingOptions = .preferredContentSize
+        host.sizingOptions = []  // sized by fit(_:) so collapse animations aren't clipped
         host.view.wantsLayer = true
         host.view.layer?.backgroundColor = .clear
         contentViewController = host
@@ -31,18 +31,36 @@ final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { acceptsKeyboard }
     override var canBecomeMain: Bool { false }
 
-    /// Grow and shrink downward from a fixed top edge.
-    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
-        var rect = frameRect
-        if frame.size != .zero, rect.size != frame.size, rect.origin == frame.origin {
-            rect.origin.y = frame.maxY - rect.height
+    // MARK: - Size
+
+    private var pendingShrink: DispatchWorkItem?
+    /// How long a collapse animation runs before the window shrinks to fit.
+    static let shrinkDelay: TimeInterval = 0.32
+
+    /// The window is always as big as the expanded list (the area around the pill is fully
+    /// transparent, so clicks there fall through to the windows below). It only resizes when
+    /// rows come or go: at once when growing, after the collapse animation when shrinking.
+    /// The top-left corner stays put, so the pill never moves and the list grows to the right.
+    func fit(_ size: CGSize) {
+        let target = NSSize(width: ceil(size.width), height: ceil(size.height))
+        guard target != frame.size else { return }
+        pendingShrink?.cancel()
+        if target.width >= frame.width && target.height >= frame.height {
+            resize(to: target)
+        } else {
+            let work = DispatchWorkItem { [weak self] in self?.resize(to: target) }
+            pendingShrink = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.shrinkDelay, execute: work)
         }
-        super.setFrame(rect, display: flag)
+    }
+
+    private func resize(to size: NSSize) {
+        setFrame(NSRect(x: frame.minX, y: frame.maxY - size.height, width: size.width, height: size.height), display: true)
     }
 
     // MARK: - Position
 
-    private static let originKey = "panelTopLeft"
+    private static let originKey = "panelTopLeftCorner"
 
     func savePosition() {
         UserDefaults.standard.set(NSStringFromPoint(NSPoint(x: frame.minX, y: frame.maxY)), forKey: Self.originKey)
@@ -58,6 +76,6 @@ final class FloatingPanel: NSPanel {
         }
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
-        setFrameTopLeftPoint(NSPoint(x: visible.midX - frame.width / 2, y: visible.maxY - 8))
+        setFrameTopLeftPoint(NSPoint(x: visible.midX - 40, y: visible.maxY - 8))
     }
 }

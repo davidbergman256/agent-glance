@@ -11,7 +11,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.start()
-        panel = FloatingPanel(content: PanelView(model: model))
+        panel = FloatingPanel(content: PanelView(
+            model: model,
+            onFocus: { [weak self] session in self?.focus(session) },
+            onMic: { [weak self] session in self?.dictate(into: session) },
+            onSize: { [weak self] size in self?.panel?.fit(size) }
+        ))
         panel.orderFrontRegardless()
         NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.panel.savePosition() }
@@ -37,6 +42,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppSettings.compactView = compact
         model.compactView = compact
     }
+
+    // MARK: - Rows
+
+    func focus(_ session: Session) {
+        if session.state == .done { model.store.dismiss(session.key) }
+    }
+
+    func dictate(into session: Session?) {}
 
     // MARK: - Hooks
 
