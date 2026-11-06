@@ -23,6 +23,9 @@ public struct Session: Identifiable, Sendable, Equatable {
     public var status: String
     public var updatedAt: Date
     public var transcriptPath: String?
+    /// Codex's async question tool returns at once and the turn ends while the card still
+    /// waits; this keeps the row yellow until the next prompt.
+    public var awaitingAnswer = false
 
     public var id: SessionKey { key }
 }

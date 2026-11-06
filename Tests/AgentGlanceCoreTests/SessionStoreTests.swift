@@ -175,3 +175,74 @@ struct SessionStoreTests {
         #expect(store.sessions.map(\.key.id) == ["a", "b"])
     }
 }
+
+@MainActor
+struct SpikeFindingTests {
+    let store = SessionStore()
+    let codexQuestion: [String: Any] = ["questions": [["title": "Which palette?", "options": ["Ocean", "Forest"]]]]
+
+    @Test func codexAsyncQuestionStaysYellowThroughStop() throws {
+        store.apply(try event("UserPromptSubmit", source: .codex, session: "c"), now: t0)
+        store.apply(try event("PreToolUse", source: .codex, session: "c", tool: "request_user_input_async", input: codexQuestion), now: t0)
+        store.apply(try event("PostToolUse", source: .codex, session: "c", tool: "request_user_input_async", input: codexQuestion), now: t0)
+        store.apply(try event("Stop", source: .codex, session: "c"), now: t0)
+        #expect(store.sessions[0].state == .question)
+        #expect(store.sessions[0].status == "Asking: Which palette?")
+    }
+
+    @Test func codexAsyncQuestionClearedByNextPrompt() throws {
+        store.apply(try event("PreToolUse", source: .codex, session: "c", tool: "request_user_input_async", input: codexQuestion), now: t0)
+        store.apply(try event("Stop", source: .codex, session: "c"), now: t0)
+        store.apply(try event("UserPromptSubmit", source: .codex, session: "c"), now: t0)
+        #expect(store.sessions[0].state == .working)
+        store.apply(try event("Stop", source: .codex, session: "c"), now: t0)
+        #expect(store.sessions[0].state == .done)
+    }
+
+    @Test func claudeQuestionAnsweredGoesWorking() throws {
+        let input: [String: Any] = ["questions": [["question": "Which?"]]]
+        store.apply(try event("PreToolUse", tool: "AskUserQuestion", input: input), now: t0)
+        store.apply(try event("PostToolUse", tool: "AskUserQuestion", input: input), now: t0)
+        #expect(store.sessions[0].state == .working)
+    }
+
+    @Test func markInterruptedSetsStoppedDone() throws {
+        store.apply(try event("PermissionRequest", tool: "Bash", input: ["command": "rm x"]), now: t0)
+        store.markInterrupted(SessionKey(source: .claude, id: "s1"), now: t0)
+        #expect(store.sessions[0].state == .done)
+        #expect(store.sessions[0].status == "Stopped")
+    }
+
+    @Test func markInterruptedIgnoresWorkingRows() throws {
+        store.apply(try event("UserPromptSubmit"), now: t0)
+        store.markInterrupted(SessionKey(source: .claude, id: "s1"), now: t0)
+        #expect(store.sessions[0].state == .working)
+    }
+}
+
+struct TranscriptSignalsTests {
+    func tail(_ lines: [String]) -> Data { Data(lines.joined(separator: "\n").utf8) }
+
+    @Test func rejectedToolUseIsInterrupted() {
+        let t = tail([
+            #"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash"}]}}"#,
+            #"{"type":"user","message":{"content":[{"type":"tool_result","is_error":true,"content":"The user doesn't want to proceed with this tool use."}]},"toolUseResult":"User rejected tool use"}"#,
+            #"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}"#,
+        ])
+        #expect(TranscriptSignals.isInterrupted(tail: t))
+    }
+
+    @Test func pendingToolUseIsNotInterrupted() {
+        let t = tail([#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash"}]}}"#])
+        #expect(!TranscriptSignals.isInterrupted(tail: t))
+    }
+
+    @Test func interruptFollowedByNewAssistantOutputIsNotInterrupted() {
+        let t = tail([
+            #"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}"#,
+            #"{"type":"user","message":{"content":"try again"}}"#,
+            #"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash"}]}}"#,
+        ])
+        #expect(!TranscriptSignals.isInterrupted(tail: t))
+    }
+}

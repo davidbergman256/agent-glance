@@ -15,6 +15,7 @@ final class AppModel {
     @ObservationIgnored private var server: EventSocketServer?
     @ObservationIgnored private var expiryTimer: Timer?
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
+    @ObservationIgnored private let watchers = TranscriptWatchers()
 
     func start() {
         server = try? EventSocketServer(path: Paths.socket) { [weak self] event in
@@ -36,6 +37,14 @@ final class AppModel {
             refreshTitle(key, transcriptPath: event.transcriptPath)
         }
         updateExpiryTimer()
+        syncWatchers()
+    }
+
+    private func syncWatchers() {
+        watchers.sync(store.sessions) { [weak self] key in
+            self?.store.markInterrupted(key, now: Date())
+            self?.syncWatchers()
+        }
     }
 
     func showNotice(_ text: String) {

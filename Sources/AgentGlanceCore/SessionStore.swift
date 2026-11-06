@@ -30,21 +30,30 @@ public final class SessionStore {
             return
         }
         let current = sessions.first { $0.key == key }
-        guard let (state, status) = Self.transition(e, current: current) else { return }
+        guard let next = Self.transition(e, current: current) else { return }
         if let i = sessions.firstIndex(where: { $0.key == key }) {
-            sessions[i].state = state
-            sessions[i].status = Self.truncate(status)
+            sessions[i].state = next.state
+            sessions[i].status = Self.truncate(next.status)
+            sessions[i].awaitingAnswer = next.awaitingAnswer
             sessions[i].updatedAt = now
             if let path = e.transcriptPath { sessions[i].transcriptPath = path }
         } else {
-            sessions.append(Session(key: key, title: Self.untitled, state: state,
-                                    status: Self.truncate(status), updatedAt: now, transcriptPath: e.transcriptPath))
+            sessions.append(Session(key: key, title: Self.untitled, state: next.state, status: Self.truncate(next.status),
+                                    updatedAt: now, transcriptPath: e.transcriptPath, awaitingAnswer: next.awaitingAnswer))
         }
     }
 
     public func setTitle(_ title: String, for key: SessionKey) {
         guard let i = sessions.firstIndex(where: { $0.key == key }) else { return }
         sessions[i].title = title
+    }
+
+    /// Called when the transcript shows the user denied a permission or stopped the turn.
+    public func markInterrupted(_ key: SessionKey, now: Date) {
+        guard let i = sessions.firstIndex(where: { $0.key == key }), sessions[i].state.needsUser else { return }
+        sessions[i].state = .done
+        sessions[i].status = "Stopped"
+        sessions[i].updatedAt = now
     }
 
     public func dismiss(_ key: SessionKey) {
@@ -64,35 +73,49 @@ public final class SessionStore {
 
     // MARK: - Event mapping
 
-    static let questionTools: Set<String> = ["AskUserQuestion", "request_user_input"]
+    static let questionTools: Set<String> = ["AskUserQuestion", "request_user_input", "request_user_input_async"]
+    /// Question tools that return before the user answers (the card keeps waiting).
+    static let asyncQuestionTools: Set<String> = ["request_user_input_async"]
     static let shellTools: Set<String> = ["Bash", "shell", "exec_command", "local_shell"]
     static let editTools: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch"]
 
-    /// Returns the new state and status line, or nil when the event doesn't change the row.
-    static func transition(_ e: HookEvent, current: Session?) -> (SessionState, String)? {
+    struct Next { var state: SessionState; var status: String; var awaitingAnswer = false }
+
+    /// Returns the row's next state, or nil when the event doesn't change it.
+    static func transition(_ e: HookEvent, current: Session?) -> Next? {
         let tool = e.toolName ?? ""
+        let waiting = current?.awaitingAnswer == true
         switch e.name {
-        case "UserPromptSubmit", "PostToolUse":
-            return (.working, "Thinking")
+        case "UserPromptSubmit":
+            return Next(state: .working, status: "Thinking")
+        case "PostToolUse":
+            if waiting, let current { return Next(state: current.state, status: current.status, awaitingAnswer: true) }
+            return Next(state: .working, status: "Thinking")
         case "PreToolUse":
-            if questionTools.contains(tool) { return (.question, questionStatus(e)) }
-            return (.working, toolStatus(tool, input: e.toolInput))
+            if questionTools.contains(tool) {
+                return Next(state: .question, status: questionStatus(e), awaitingAnswer: asyncQuestionTools.contains(tool))
+            }
+            return Next(state: .working, status: toolStatus(tool, input: e.toolInput))
         case "PermissionRequest":
-            if questionTools.contains(tool) { return (.question, questionStatus(e)) }
-            return (.permission, permissionStatus(tool, input: e.toolInput))
+            if questionTools.contains(tool) { return Next(state: .question, status: questionStatus(e), awaitingAnswer: waiting) }
+            return Next(state: .permission, status: permissionStatus(tool, input: e.toolInput))
         case "Notification":
             guard e.notificationType == "permission_prompt" else { return nil }
-            if let current, current.state.needsUser { return (current.state, current.status) }
-            return (.permission, "Needs permission")
+            if let current, current.state.needsUser {
+                return Next(state: current.state, status: current.status, awaitingAnswer: current.awaitingAnswer)
+            }
+            return Next(state: .permission, status: "Needs permission")
         case "Stop":
-            return (.done, "Done")
+            if waiting, let current { return Next(state: current.state, status: current.status, awaitingAnswer: true) }
+            return Next(state: .done, status: "Done")
         default:
             return nil
         }
     }
 
     static func questionStatus(_ e: HookEvent) -> String {
-        let q = e.toolInput?["questions"]?[0]?["question"]?.string
+        let first = e.toolInput?["questions"]?[0]
+        let q = first?["question"]?.string ?? first?["title"]?.string
         return q.map { "Asking: \($0)" } ?? "Asking a question"
     }
 
