@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.start()
+        BackgroundCursor.enable()
         panel = FloatingPanel(content: PanelView(
             model: model,
             onFocus: { [weak self] session in self?.focus(session) },

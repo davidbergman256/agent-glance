@@ -13,6 +13,7 @@ A tiny menu-bar app for macOS that floats a Liquid Glass pill above your windows
 - **Click a row** to jump straight to that session.
 - **Click the mic** on a row, speak, and press **Return**. The text is typed into that session and sent. **Esc** cancels.
 - **Click an empty spot** in the open list to keep it open. Click an empty spot again to fold it back.
+- **Drag the right edge** of the open list to make it wider or narrower, from 260 to 640 pt. The height always fits every session, and the width is remembered.
 
 Everything runs on your Mac. Speech recognition is on-device, and nothing is sent anywhere except into the session you dictate to.
 

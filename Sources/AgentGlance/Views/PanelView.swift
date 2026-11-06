@@ -14,12 +14,14 @@ struct PanelView: View {
     @State private var hovering = false
     /// After folding the list by click, ignore hover until the pointer leaves once.
     @State private var hoverSuppressed = false
+    /// Width when the current edge drag began; non-nil while resizing (keeps the list open).
+    @State private var dragStartWidth: CGFloat?
     @State private var hoverTask: Task<Void, Never>?
     @Namespace private var glass
     static let motion = Animation.smooth(duration: 0.3)
 
     private var expanded: Bool {
-        !model.compactView || (hovering && !hoverSuppressed) || model.dictatingKey != nil
+        !model.compactView || (hovering && !hoverSuppressed) || model.dictatingKey != nil || dragStartWidth != nil
     }
 
     var body: some View {
@@ -32,6 +34,7 @@ struct PanelView: View {
             GlassEffectContainer {
                 if expanded {
                     list
+                        .overlay(alignment: .trailing) { resizeHandle }
                         .glassEffect(.clear, in: .rect(cornerRadius: Theme.listCornerRadius, style: .continuous))
                         .glassEffectID("surface", in: glass)
                         .transition(.asymmetric(
@@ -76,6 +79,7 @@ struct PanelView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         SessionRow(session: session,
                                    recording: model.dictatingKey == session.key,
+                                   titleMaxWidth: PanelMetrics.titleMaxWidth(listWidth: model.listWidth),
                                    onFocus: { onFocus(session) },
                                    onMic: { onMic(session) })
                         if model.dictatingKey == session.key {
@@ -93,9 +97,28 @@ struct PanelView: View {
             }
         }
         .padding(Theme.listPadding)
-        .frame(width: Theme.listWidth, alignment: .leading)
+        .frame(width: model.listWidth, alignment: .leading)
         .contentShape(.rect(cornerRadius: Theme.listCornerRadius, style: .continuous))
         .onTapGesture(perform: toggleCompact)  // rows and mic buttons handle their own clicks first
+    }
+
+    /// A thin strip on the right edge (bottom-right corner included): drag it to change the
+    /// width only. The left edge stays where the pill is.
+    private var resizeHandle: some View {
+        ResizeHandle(
+            onBegin: { dragStartWidth = model.listWidth },
+            onDrag: { dx in
+                let start = dragStartWidth ?? model.listWidth
+                model.listWidth = CGFloat(PanelMetrics.clampedWidth(Double(start + dx)))
+            },
+            onEnd: {
+                AppSettings.listWidth = Double(model.listWidth)
+                dragStartWidth = nil
+            }
+        )
+        .frame(width: 8)
+        .frame(maxHeight: .infinity)
+        .accessibilityLabel("Resize width")
     }
 
     private struct Section { let source: Source; let sessions: [Session] }

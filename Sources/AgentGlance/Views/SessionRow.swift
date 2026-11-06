@@ -5,6 +5,7 @@ import SwiftUI
 struct SessionRow: View {
     let session: Session
     var recording = false
+    var titleMaxWidth = Theme.titleMaxWidth
     let onFocus: () -> Void
     let onMic: () -> Void
     @State private var hovering = false
@@ -16,7 +17,7 @@ struct SessionRow: View {
                 .font(Theme.title)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(maxWidth: Theme.titleMaxWidth, alignment: .leading)
+                .frame(maxWidth: titleMaxWidth, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             Text(session.status)
                 .font(Theme.status)

@@ -29,7 +29,6 @@ enum Theme {
     static let heading = Font.system(size: 11, weight: .semibold, design: .rounded)
 
     static let rowHeight: CGFloat = 30
-    static let listWidth: CGFloat = 330
     static let titleMaxWidth: CGFloat = 150
     static let dotSize: CGFloat = 9
     /// The pill is a capsule about 34 pt tall, so its corners are ~17 pt. The list uses the

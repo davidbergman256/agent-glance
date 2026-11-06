@@ -11,6 +11,8 @@ final class AppModel {
     var enabledSources: Set<Source> = Set(Source.allCases.filter { AppSettings.isEnabled($0) })
     /// When true the panel rests as the pill and expands on hover; when false the list stays open.
     var compactView = AppSettings.compactView
+    /// The open list's width, dragged by its right edge (height always fits every session).
+    var listWidth = CGFloat(AppSettings.listWidth)
     /// The session being dictated into, and the live transcript (Task 9).
     var dictatingKey: SessionKey?
     var transcript = ""
@@ -102,6 +104,14 @@ enum AppSettings {
     static var compactView: Bool {
         get { UserDefaults.standard.object(forKey: "compactView") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "compactView") }
+    }
+
+    static var listWidth: Double {
+        get {
+            let saved = UserDefaults.standard.double(forKey: "listWidth")
+            return PanelMetrics.clampedWidth(saved == 0 ? PanelMetrics.defaultWidth : saved)
+        }
+        set { UserDefaults.standard.set(PanelMetrics.clampedWidth(newValue), forKey: "listWidth") }
     }
 
     static var hooksConsentAsked: Bool {
