@@ -4,9 +4,6 @@ import SwiftUI
 /// A borderless panel that floats above other windows on every Space (including full-screen
 /// apps), never activates the app when clicked, and keeps its top edge fixed as it resizes.
 final class FloatingPanel: NSPanel {
-    /// Set while dictating, so Return and Esc reach the panel.
-    var acceptsKeyboard = false
-
     init<Content: View>(content: Content) {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 120, height: 34),
                    styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
@@ -28,7 +25,7 @@ final class FloatingPanel: NSPanel {
         restorePosition()
     }
 
-    override var canBecomeKey: Bool { acceptsKeyboard }
+    override var canBecomeKey: Bool { false }  // never takes keyboard focus from your app
     override var canBecomeMain: Bool { false }
 
     // MARK: - Size

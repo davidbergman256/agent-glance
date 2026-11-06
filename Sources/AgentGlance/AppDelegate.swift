@@ -1,5 +1,6 @@
 import AgentGlanceCore
 import AppKit
+import Carbon.HIToolbox
 import ServiceManagement
 
 @MainActor
@@ -8,7 +9,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let focuser = SessionFocuser()
     private var panel: FloatingPanel!
     private var statusItem: StatusItemController!
-    private var hotKey: HotKey?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.start()
@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { self?.panel.savePosition() }
         }
         statusItem = StatusItemController(model: model, app: self)
-        hotKey = HotKey { [weak self] in self?.togglePanel() }
+        HotKeys.shared.register(keyCode: kVK_ANSI_A, modifiers: cmdKey | optionKey) { [weak self] in self?.togglePanel() }
         ensureHooks()
     }
 
@@ -58,7 +58,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Dictation
 
     private let dictation = Dictation()
-    private var keyMonitor: Any?
 
     /// Mic button: starts dictating into the session, or, on the recording row, finishes and sends.
     func dictate(into session: Session?) {
@@ -117,29 +116,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.transcript = ""
     }
 
-    /// While dictating, the panel takes key status (without activating the app) so Return and Esc
-    /// reach it; everything else is swallowed so stray keys don't go anywhere.
+    private var dictationKeys: [UInt32] = []
+
+    /// While dictating, Return/Enter send and Esc cancels, whichever app is in front: they're
+    /// claimed as global shortcuts for the duration and released the moment dictation ends.
     private func beginKeyboardCapture() {
-        panel.acceptsKeyboard = true
-        panel.makeKey()
-        guard keyMonitor == nil else { return }
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            MainActor.assumeIsolated {
-                switch event.keyCode {
-                case 36, 76: self?.finishDictation()  // Return, Enter
-                case 53: self?.cancelDictation()  // Esc
-                default: break
-                }
-            }
-            return nil
-        }
+        guard dictationKeys.isEmpty else { return }
+        let keys = HotKeys.shared
+        dictationKeys = [
+            keys.register(keyCode: kVK_Return) { [weak self] in self?.finishDictation() },
+            keys.register(keyCode: kVK_ANSI_KeypadEnter) { [weak self] in self?.finishDictation() },
+            keys.register(keyCode: kVK_Escape) { [weak self] in self?.cancelDictation() },
+        ]
     }
 
     private func endKeyboardCapture() {
-        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        keyMonitor = nil
-        panel.acceptsKeyboard = false
-        panel.resignKey()
+        dictationKeys.forEach(HotKeys.shared.unregister)
+        dictationKeys = []
     }
 
     // MARK: - Hooks
